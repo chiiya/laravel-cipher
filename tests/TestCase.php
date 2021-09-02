@@ -2,9 +2,8 @@
 
 namespace Chiiya\LaravelCipher\Tests;
 
-use Illuminate\Database\Eloquent\Factories\Factory;
-use Orchestra\Testbench\TestCase as Orchestra;
 use Chiiya\LaravelCipher\LaravelCipherServiceProvider;
+use Orchestra\Testbench\TestCase as Orchestra;
 
 class TestCase extends Orchestra
 {
