@@ -3,14 +3,11 @@
 namespace Chiiya\LaravelCipher\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Console\ConfirmableTrait;
 use Illuminate\Support\Str;
 use ParagonIE\ConstantTime\Hex;
 
 class InstallCommand extends Command
 {
-    use ConfirmableTrait;
-
     /**
      * The name and signature of the console command.
      *
@@ -67,7 +64,11 @@ class InstallCommand extends Command
     {
         $currentKey = $this->laravel['config']['cipher.key'];
 
-        if (strlen($currentKey) !== 0 && (! $this->confirmToProceed())) {
+        if (strlen($currentKey) !== 0 && ! $this->option('force')) {
+            $this->error('Cipher key already set! Overwriting it will lead to loss of all encrypted data.');
+            $this->warn('To proceed, back up, then delete your CIPHER_KEY. Afterwards, run the command again.');
+            $this->warn('Alternatively, run the command with the --force option if you are really, really sure.');
+
             return false;
         }
 
