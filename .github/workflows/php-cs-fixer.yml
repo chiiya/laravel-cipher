@@ -1,4 +1,4 @@
-name: Check & fix styling
+name: Check & lint files
 
 on: [push]
 
@@ -20,4 +20,4 @@ jobs:
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: Fix styling
+          commit_message: Lint files
