@@ -3,7 +3,9 @@
 namespace Chiiya\LaravelCipher\Commands;
 
 use Chiiya\LaravelCipher\Eloquent\HasEncryptedAttributes;
+use Chiiya\LaravelCipher\Events\ModelsEncrypted;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Symfony\Component\Finder\Finder;
@@ -30,7 +32,7 @@ class EncryptExistingDataCommand extends Command
     /**
      * Execute the command.
      */
-    public function handle(): int
+    public function handle(Dispatcher $events): int
     {
         $models = $this->models();
 
@@ -39,6 +41,10 @@ class EncryptExistingDataCommand extends Command
 
             return self::FAILURE;
         }
+
+        $events->listen(ModelsEncrypted::class, function ($event) {
+            $this->info("{$event->count} [{$event->model}] records have been encrypted.");
+        });
 
         $models->each(function (string $model) {
             $instance = new $model;
@@ -53,6 +59,8 @@ class EncryptExistingDataCommand extends Command
             }
         });
 
+        $events->forget(ModelsEncrypted::class);
+
         return self::SUCCESS;
     }
 
@@ -65,7 +73,11 @@ class EncryptExistingDataCommand extends Command
             return collect($models);
         }
 
-        return collect((new Finder)->in(app_path('Models'))->files())
+        $dirs = collect($this->laravel['config']['cipher.model_locations'])
+            ->map(fn (string $dir) => base_path($dir))
+            ->all();
+
+        return collect((new Finder)->in($dirs)->files())
             ->map(fn (SplFileInfo $model) => $this->laravel->getNamespace().str_replace(
                     ['/', '.php'],
                     ['\\', ''],

@@ -2,6 +2,7 @@
 
 namespace Chiiya\LaravelCipher\Eloquent;
 
+use Chiiya\LaravelCipher\Events\ModelsEncrypted;
 use Chiiya\LaravelCipher\Services\CipherSweetService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -31,6 +32,8 @@ trait HasEncryptedAttributes
                 $models->each->encrypt();
 
                 $total += $models->count();
+
+                event(new ModelsEncrypted(static::class, $total));
             });
 
         return $total;

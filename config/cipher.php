@@ -17,4 +17,14 @@ return [
     | See also https://ciphersweet.paragonie.com/security#informal-security-analysis
     */
     'backend' => 'boring',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model Locations
+    |--------------------------------------------------------------------------
+    | Only used for encrypting existing, not-yet encrypted data
+    */
+    'model_locations' => [
+        'app/Models',
+    ]
 ];
