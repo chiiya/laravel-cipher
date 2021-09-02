@@ -77,7 +77,7 @@ class EncryptExistingDataCommand extends Command
             ->map(fn (string $dir) => base_path($dir))
             ->all();
 
-        return collect((new Finder)->in($dirs)->files())
+        return collect((new Finder())->in($dirs)->files())
             ->map(fn (SplFileInfo $model) => $this->laravel->getNamespace().str_replace(
                 ['/', '.php'],
                 ['\\', ''],
