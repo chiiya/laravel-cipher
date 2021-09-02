@@ -24,7 +24,6 @@ class InstallCommand extends Command
      */
     protected $description = 'Run the commands necessary to prepare laravel-cipher for use';
 
-
     /**
      * Execute the command.
      */

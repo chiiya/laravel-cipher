@@ -47,7 +47,7 @@ class EncryptExistingDataCommand extends Command
         });
 
         $models->each(function (string $model) {
-            $instance = new $model;
+            $instance = new $model();
             $chunkSize = $this->option('chunk');
 
             $total = $this->isEncryptable($model)
@@ -79,10 +79,10 @@ class EncryptExistingDataCommand extends Command
 
         return collect((new Finder)->in($dirs)->files())
             ->map(fn (SplFileInfo $model) => $this->laravel->getNamespace().str_replace(
-                    ['/', '.php'],
-                    ['\\', ''],
-                    Str::after($model->getRealPath(), realpath(app_path()).DIRECTORY_SEPARATOR)
-                ))
+                ['/', '.php'],
+                ['\\', ''],
+                Str::after($model->getRealPath(), realpath(app_path()).DIRECTORY_SEPARATOR)
+            ))
             ->filter(fn (string $model) => $this->isEncryptable($model))
             ->values();
     }
