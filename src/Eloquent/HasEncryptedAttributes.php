@@ -22,17 +22,17 @@ use ParagonIE\CipherSweet\Contract\TransformationInterface;
 trait HasEncryptedAttributes
 {
     /**
-     * @var array<string, array<string|array, string|array, ?bool, ?int>> $indexes
+     * @var array<string, array<string|array, string|array, ?bool, ?int>>
      */
     protected static array $indexes = [];
 
     /**
-     * @var array<string, array<string, CipherSweetBlindIndex>> $blindIndexes
+     * @var array<string, array<string, CipherSweetBlindIndex>>
      */
     protected static array $blindIndexes = [];
 
     /**
-     * @var array<string, CompoundIndex> $compoundIndexes
+     * @var array<string, CompoundIndex>
      */
     protected static array $compoundIndexes = [];
 
