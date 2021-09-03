@@ -2,7 +2,12 @@
 
 namespace Chiiya\LaravelCipher\Services;
 
+use Chiiya\LaravelCipher\Contracts\Encryptable;
+use Chiiya\LaravelCipher\Models\BlindIndex;
 use ParagonIE\CipherSweet\CipherSweet;
+use ParagonIE\CipherSweet\EncryptedRow;
+use ParagonIE\CipherSweet\Exception\ArrayKeyException;
+use ParagonIE\CipherSweet\Exception\BlindIndexNotFoundException;
 use ParagonIE\CipherSweet\Exception\CipherSweetException;
 use ParagonIE\CipherSweet\Exception\CryptoOperationException;
 use ParagonIE\CipherSweet\Exception\InvalidCiphertextException;
@@ -56,8 +61,62 @@ class CipherSweetService
         return unserialize($this->engine->getBackend()->decrypt($value, $key));
     }
 
+    /**
+     * Calculate the value for a given blind index using the given attribute $values.
+     *
+     * @return string|string[]
+     * @throws ArrayKeyException
+     * @throws CryptoOperationException
+     * @throws SodiumException
+     * @throws BlindIndexNotFoundException
+     */
+    public function getBlindIndex(Encryptable $encryptable, string $index, array $values)
+    {
+        $row = $this->buildEncryptedRow($encryptable);
+
+        return $row->getBlindIndex($index, $values);
+    }
+
+    /**
+     * Update all blind and compound indexes for the given $encryptable model.
+     *
+     * @throws CryptoOperationException
+     * @throws SodiumException
+     * @throws ArrayKeyException
+     */
+    public function syncIndexes(Encryptable $encryptable)
+    {
+        $row = $this->buildEncryptedRow($encryptable);
+        $indexes = $row->getAllBlindIndexes($encryptable->attributesToArray());
+        $indexes = collect($indexes)->map(fn (string $value, string $name) => BlindIndex::query()->newModelInstance([
+            'name' => $name,
+            'value' => $value,
+            'indexable_type' => get_class($encryptable),
+            'indexable_id' => $encryptable->getKey(),
+        ]))->all();
+        $encryptable->indexes()->delete();
+        $encryptable->indexes()->insert($indexes);
+    }
+
     public function getEngine(): CipherSweet
     {
         return $this->engine;
+    }
+
+    protected function buildEncryptedRow(Encryptable $encryptable): EncryptedRow
+    {
+        $row = new EncryptedRow($this->engine, $encryptable->getTable());
+
+        foreach ($encryptable->getBlindIndexes() as $column => $indexes) {
+            foreach ($indexes as $index) {
+                $row->addBlindIndex($column, $index);
+            }
+        }
+
+        foreach ($encryptable->getCompoundIndexes() as $index) {
+            $row->addCompoundIndex($index);
+        }
+
+        return $row;
     }
 }

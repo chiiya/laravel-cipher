@@ -13,18 +13,27 @@ return [
     |--------------------------------------------------------------------------
     | CipherSweet Backend
     |--------------------------------------------------------------------------
-    | One of "boring", "modern" or "fips"
+    | One of "brng", "nacl" or "fips"
     | See also https://ciphersweet.paragonie.com/security#informal-security-analysis
     */
-    'backend' => 'boring',
+    'backend' => 'brng',
 
     /*
     |--------------------------------------------------------------------------
     | Model Locations
     |--------------------------------------------------------------------------
-    | Only used for encrypting existing, not-yet encrypted data
+    | Define where you encryptable models are located. Used for encrypting
+    | existing data and scanning for indexes.
     */
     'model_locations' => [
         'app/Models',
-    ]
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Blind Index Model
+    |--------------------------------------------------------------------------
+    | Define which blind index model implementation should be used.
+    */
+    'index_model' => Chiiya\LaravelCipher\Models\BlindIndex::class,
 ];

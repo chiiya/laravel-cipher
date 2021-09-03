@@ -29,7 +29,7 @@ class InstallCommand extends Command
      */
     public function handle(): int
     {
-        $key = $this->generateRandomKey();
+        $key = Hex::encode(random_bytes(32));
 
         if ($this->option('show')) {
             $this->line('<comment>'.$key.'</comment>');
@@ -46,14 +46,6 @@ class InstallCommand extends Command
         $this->info('Cipher key set successfully.');
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Generate a random key for the application.
-     */
-    protected function generateRandomKey(): string
-    {
-        return Hex::encode(random_bytes(32));
     }
 
     /**

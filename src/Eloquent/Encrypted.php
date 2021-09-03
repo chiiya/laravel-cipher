@@ -2,6 +2,7 @@
 
 namespace Chiiya\LaravelCipher\Eloquent;
 
+use Chiiya\LaravelCipher\Contracts\Encryptable;
 use Chiiya\LaravelCipher\Services\CipherSweetService;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Support\Str;

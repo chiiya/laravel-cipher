@@ -21,7 +21,7 @@ class LaravelCipherServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-cipher')
             ->hasConfigFile()
-//            ->hasMigration('create_laravelcipher_table')
+            ->hasMigration('create_blind_indexes_table')
             ->hasCommand(InstallCommand::class)
             ->hasCommand(EncryptExistingDataCommand::class);
     }
@@ -39,11 +39,11 @@ class LaravelCipherServiceProvider extends PackageServiceProvider
     protected function getBackend(): BackendInterface
     {
         switch (config('cipher.backend')) {
-            case 'modern':
+            case 'nacl':
                 return new ModernCrypto();
             case 'fips':
                 return new FIPSCrypto();
-            case 'boring':
+            case 'brng':
             default:
                 return new BoringCrypto();
         }
