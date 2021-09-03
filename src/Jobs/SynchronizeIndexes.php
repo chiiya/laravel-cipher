@@ -16,7 +16,10 @@ use SodiumException;
 
 class SynchronizeIndexes implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
 
     private Model $model;
 
