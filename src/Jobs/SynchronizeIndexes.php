@@ -38,5 +38,4 @@ class SynchronizeIndexes implements ShouldQueue
             $service->syncIndexes($this->model);
         }
     }
-
 }

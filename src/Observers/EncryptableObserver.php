@@ -9,7 +9,7 @@ class EncryptableObserver
 {
     public function deleting(Encryptable $model): void
     {
-        $model->indexes()->delete();
+        $model->blindIndexes()->delete();
     }
 
     public function saved(Encryptable $model): void

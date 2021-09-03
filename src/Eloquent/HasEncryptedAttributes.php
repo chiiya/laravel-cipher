@@ -8,6 +8,7 @@ use Chiiya\LaravelCipher\Models\BlindIndex;
 use Chiiya\LaravelCipher\Observers\EncryptableObserver;
 use Chiiya\LaravelCipher\Services\CipherSweetService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Arr;
@@ -18,28 +19,24 @@ use ParagonIE\CipherSweet\Contract\TransformationInterface;
 
 /**
  * @method static Builder|static whereBlind(string $index, $value)
+ * @mixin Model
  */
 trait HasEncryptedAttributes
 {
     /**
-     * @var array<string, array<string|array, string|array, ?bool, ?int>> $indexes
+     * @var array<string, array<string, CipherSweetBlindIndex>>
      */
-    protected static array $indexes = [];
+    private static array $blindIndexes = [];
 
     /**
-     * @var array<string, array<string, CipherSweetBlindIndex>> $blindIndexes
+     * @var array<string, CompoundIndex>
      */
-    protected static array $blindIndexes = [];
-
-    /**
-     * @var array<string, CompoundIndex> $compoundIndexes
-     */
-    protected static array $compoundIndexes = [];
+    private static array $compoundIndexes = [];
 
     /**
      * @var array<string,string|array<string>>
      */
-    protected static array $indexColumns = [];
+    private static array $indexColumns = [];
 
     /**
      * HasEncryptedAttributes boot logic.
@@ -50,10 +47,15 @@ trait HasEncryptedAttributes
         static::configureIndexes();
     }
 
+    public static function getIndexes(): array
+    {
+        return static::$indexes ?? [];
+    }
+
     /**
      * Polymorphic One-To-Many: One encryptable entity has many blind indexes.
      */
-    public function indexes(): MorphMany
+    public function blindIndexes(): MorphMany
     {
         return $this->morphMany(
             config('cipher.index_model', BlindIndex::class),
@@ -64,6 +66,11 @@ trait HasEncryptedAttributes
     public function getAadValue(): ?string
     {
         return null;
+    }
+
+    public function encryptedTypes(): array
+    {
+        return static::$encrypted ?? [];
     }
 
     /**
@@ -92,19 +99,13 @@ trait HasEncryptedAttributes
      */
     public function encrypt(): void
     {
-        $casts = $this->getCasts();
+        $casts = $this->getEncryptedAttributes();
         $attributes = $this->getAttributes();
         $encrypted = 0;
         $encrypter = resolve(CipherSweetService::class);
 
         foreach ($casts as $key => $value) {
-            if (
-                ! array_key_exists($key, $this->getAttributes())
-                || $attributes[$key] === null
-                || ! $this->isClassCastable($key)
-                || ! $this->resolveCasterClass($key) instanceof Encrypted
-                || Str::startsWith($attributes[$key], $encrypter->getEngine()->getBackend()->getPrefix())
-            ) {
+            if (Str::startsWith($attributes[$key], $encrypter->getEngine()->getBackend()->getPrefix())) {
                 continue;
             }
 
@@ -136,7 +137,7 @@ trait HasEncryptedAttributes
      */
     public function scopeWhereBlind(Builder $query, string $index, $value): Builder
     {
-        return $query->whereHas('indexes', function (Builder $builder) use ($index, $value) {
+        return $query->whereHas('blindIndexes', function (Builder $builder) use ($index, $value) {
             /** @var CipherSweetService $service */
             $service = resolve(CipherSweetService::class);
             $column = static::$indexColumns[$index];
@@ -153,7 +154,7 @@ trait HasEncryptedAttributes
      */
     protected static function configureIndexes(): void
     {
-        foreach (static::$indexes as $name => $configuration) {
+        foreach (static::getIndexes() as $name => $configuration) {
             $configuration = Arr::wrap($configuration);
             $column = $configuration[0];
             $transformations = isset($configuration[1]) ? static::convertTransformations(Arr::wrap($configuration[1])) : [];
@@ -182,5 +183,18 @@ trait HasEncryptedAttributes
         return array_map(function ($transformation) {
             return app($transformation);
         }, $transformations);
+    }
+
+    public function getEncryptedAttributes(): array
+    {
+        $casts = $this->getCasts();
+        $attributes = $this->attributesToArray();
+
+        return collect($casts)->filter(fn ($value, string $key) =>
+            ! array_key_exists($key, $this->getAttributes())
+            || $attributes[$key] === null
+            || ! $this->isClassCastable($key)
+            || ! $this->resolveCasterClass($key) instanceof Encrypted
+        )->all();
     }
 }

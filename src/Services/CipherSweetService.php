@@ -5,6 +5,7 @@ namespace Chiiya\LaravelCipher\Services;
 use Chiiya\LaravelCipher\Contracts\Encryptable;
 use Chiiya\LaravelCipher\Models\BlindIndex;
 use ParagonIE\CipherSweet\CipherSweet;
+use ParagonIE\CipherSweet\Constants;
 use ParagonIE\CipherSweet\EncryptedRow;
 use ParagonIE\CipherSweet\Exception\ArrayKeyException;
 use ParagonIE\CipherSweet\Exception\BlindIndexNotFoundException;
@@ -94,8 +95,8 @@ class CipherSweetService
             'indexable_type' => get_class($encryptable),
             'indexable_id' => $encryptable->getKey(),
         ]))->all();
-        $encryptable->indexes()->delete();
-        $encryptable->indexes()->insert($indexes);
+        $encryptable->blindIndexes()->delete();
+        $encryptable->blindIndexes()->insert($indexes);
     }
 
     public function getEngine(): CipherSweet
@@ -117,6 +118,27 @@ class CipherSweetService
             $row->addCompoundIndex($index);
         }
 
+        foreach ($encryptable->encryptedTypes() as $key => $value) {
+            $row->addField($key, $value);
+        }
+
         return $row;
+    }
+
+    protected function guessType($value): string
+    {
+        if (is_bool($value)) {
+            return Constants::TYPE_BOOLEAN;
+        }
+
+        if (is_float($value)) {
+            return Constants::TYPE_FLOAT;
+        }
+
+        if (is_int($value)) {
+            return Constants::TYPE_INT;
+        }
+
+        return Constants::TYPE_TEXT;
     }
 }

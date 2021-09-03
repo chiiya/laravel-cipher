@@ -3,6 +3,7 @@
 namespace Chiiya\LaravelCipher\Eloquent;
 
 use Chiiya\LaravelCipher\Contracts\Encryptable;
+use Chiiya\LaravelCipher\Exceptions\EncryptionException;
 use Chiiya\LaravelCipher\Services\CipherSweetService;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Support\Str;
@@ -37,6 +38,10 @@ class Encrypted implements CastsAttributes
     {
         if ($value === null) {
             return null;
+        }
+
+        if (! is_scalar($value)) {
+            throw new EncryptionException('Only scalar attributes may be encrypted');
         }
 
         return resolve(CipherSweetService::class)->encrypt($value, $model->getTable(), $key, $model->getAadValue());
