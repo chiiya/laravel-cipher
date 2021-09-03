@@ -190,7 +190,8 @@ trait HasEncryptedAttributes
         $casts = $this->getCasts();
         $attributes = $this->attributesToArray();
 
-        return collect($casts)->filter(fn ($value, string $key) =>
+        return collect($casts)->filter(
+            fn ($value, string $key) =>
             ! array_key_exists($key, $this->getAttributes())
             || $attributes[$key] === null
             || ! $this->isClassCastable($key)
