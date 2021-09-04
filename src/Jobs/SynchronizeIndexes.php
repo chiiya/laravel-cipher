@@ -2,8 +2,7 @@
 
 namespace Chiiya\LaravelCipher\Jobs;
 
-use Chiiya\LaravelCipher\Contracts\Encryptable;
-use Chiiya\LaravelCipher\Services\CipherSweetService;
+use Chiiya\LaravelCipher\Eloquent\HasEncryptedAttributes;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +20,7 @@ class SynchronizeIndexes implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    /** @var Model|HasEncryptedAttributes */
     private Model $model;
 
     public function __construct(Model $model)
@@ -35,10 +35,18 @@ class SynchronizeIndexes implements ShouldQueue
      * @throws CryptoOperationException
      * @throws SodiumException
      */
-    public function handle(CipherSweetService $service)
+    public function handle(): void
     {
-        if ($this->model instanceof Encryptable) {
-            $service->syncIndexes($this->model);
+        if ($this->isEncryptable($this->model)) {
+            $this->model->syncIndexes();
         }
+    }
+
+    /**
+     * Determine if the given model class is encryptable.
+     */
+    protected function isEncryptable(string $model): bool
+    {
+        return in_array(HasEncryptedAttributes::class, class_uses_recursive($model));
     }
 }

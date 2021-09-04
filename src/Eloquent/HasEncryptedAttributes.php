@@ -3,19 +3,23 @@
 namespace Chiiya\LaravelCipher\Eloquent;
 
 use Chiiya\LaravelCipher\Events\ModelsEncrypted;
+use Chiiya\LaravelCipher\Index;
 use Chiiya\LaravelCipher\Jobs\SynchronizeIndexes;
 use Chiiya\LaravelCipher\Models\BlindIndex;
-use Chiiya\LaravelCipher\Observers\EncryptableObserver;
-use Chiiya\LaravelCipher\Services\CipherSweetService;
+use Chiiya\LaravelCipher\Services\Encrypter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use ParagonIE\CipherSweet\BlindIndex as CipherSweetBlindIndex;
 use ParagonIE\CipherSweet\CompoundIndex;
-use ParagonIE\CipherSweet\Contract\TransformationInterface;
+use ParagonIE\CipherSweet\EncryptedRow;
+use ParagonIE\CipherSweet\Exception\ArrayKeyException;
+use ParagonIE\CipherSweet\Exception\CipherSweetException;
+use ParagonIE\CipherSweet\Exception\CryptoOperationException;
+use ParagonIE\CipherSweet\Exception\InvalidCiphertextException;
+use SodiumException;
 
 /**
  * @method static Builder|static whereBlind(string $index, $value)
@@ -24,32 +28,26 @@ use ParagonIE\CipherSweet\Contract\TransformationInterface;
 trait HasEncryptedAttributes
 {
     /**
-     * @var array<string, array<string, CipherSweetBlindIndex>>
-     */
-    private static array $blindIndexes = [];
-
-    /**
-     * @var array<string, CompoundIndex>
-     */
-    private static array $compoundIndexes = [];
-
-    /**
-     * @var array<string,string|array<string>>
-     */
-    private static array $indexColumns = [];
-
-    /**
      * HasEncryptedAttributes boot logic.
      */
     public static function bootHasEncryptedAttributes(): void
     {
-        static::observe(new EncryptableObserver());
-        static::configureIndexes();
-    }
+        static::saving(static function ($model) {
+            $model->encrypt($model->getDirty());
+        });
 
-    public static function getIndexes(): array
-    {
-        return static::$indexes ?? [];
+        static::deleting(static function ($model) {
+            $model->blindIndexes()->delete();
+        });
+
+        static::retrieved(static function ($model) {
+            $model->decrypt($model->attributes);
+        });
+
+        static::saved(static function ($model) {
+            $model->decrypt($model->attributes);
+            SynchronizeIndexes::dispatch($model)->onQueue('cipher');
+        });
     }
 
     /**
@@ -63,14 +61,130 @@ trait HasEncryptedAttributes
         );
     }
 
+    /**
+     * Get the additional, authenticated data to associate with an encrypted record.
+     */
     public function getAadValue(): ?string
     {
         return null;
     }
 
-    public function encryptedTypes(): array
+    /**
+     * Encrypt model attributes.
+     *
+     * @return $this
+     * @throws CipherSweetException
+     * @throws CryptoOperationException
+     * @throws SodiumException
+     */
+    public function encrypt(array $attributes = null): self
     {
-        return static::$encrypted ?? [];
+        /** @var Encrypter $service */
+        $service = resolve(Encrypter::class);
+        $fields = $this->prepareEncryptedFields($attributes ?: $this->attributesToArray());
+
+        foreach ($fields as $field => $value) {
+            $this->{$field} = $service->encrypt(
+                $value,
+                $this->getTable(),
+                $field,
+                $this->getAadValue()
+            );
+        }
+
+        return $this;
+    }
+
+    /**
+     * Decrypt model attributes.
+     *
+     * @return $this
+     * @throws CipherSweetException
+     * @throws CryptoOperationException
+     * @throws InvalidCiphertextException
+     * @throws SodiumException
+     */
+    public function decrypt(array $attributes = null): self
+    {
+        /** @var Encrypter $encrypter */
+        $encrypter = resolve(Encrypter::class);
+        $attributes = $attributes ?: $this->attributesToArray();
+
+        foreach ($this->encryptedFields() as $field) {
+            $name = $field->getName();
+            if (isset($attributes[$name]) && Str::startsWith($attributes[$name], $encrypter->getEngine()->getBackend()->getPrefix())) {
+                $this->{$name} = $field->unserialize($encrypter->decrypt(
+                    $attributes[$name],
+                    $this->getTable(),
+                    $name,
+                    $this->getAadValue()
+                ));
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Sync all blind indexes for the model.
+     *
+     * @throws CryptoOperationException
+     * @throws SodiumException
+     * @throws ArrayKeyException
+     */
+    public function syncIndexes(): void
+    {
+        $fields = $this->prepareEncryptedFields($this->attributesToArray());
+        $indexes = collect($this->toEncryptedRow()->getAllBlindIndexes($fields))
+            ->map(fn (string $value, string $name) => [
+                'name' => $name,
+                'value' => $value,
+                'indexable_type' => $this->getMorphClass(),
+                'indexable_id' => $this->getKey(),
+            ])
+            ->all();
+        $this->blindIndexes()->delete();
+        $this->blindIndexes()->insert($indexes);
+    }
+
+    public function toEncryptedRow(): EncryptedRow
+    {
+        /** @var Encrypter $service */
+        $service = resolve(Encrypter::class);
+
+        $row = new EncryptedRow($service->getEngine(), $this->getTable());
+
+        foreach ($this->indexes() as $index) {
+            if ($index->isCompoundIndex()) {
+                $compoundIndex = new CompoundIndex(
+                    $index->name,
+                    $index->field,
+                    $index->bits,
+                    $index->fastHash,
+                    $index->hashConfig
+                );
+
+                foreach ($index->transformations as $transformation) {
+                    $compoundIndex->addRowTransform($transformation);
+                }
+
+                $row->addCompoundIndex($compoundIndex);
+            } else {
+                $row->addBlindIndex($index->field, new CipherSweetBlindIndex(
+                    $index->name,
+                    $index->transformations,
+                    $index->bits,
+                    $index->fastHash,
+                    $index->hashConfig
+                ));
+            }
+        }
+
+        foreach ($this->encryptedFields() as $field) {
+            $row->addTextField($field->getName());
+        }
+
+        return $row;
     }
 
     /**
@@ -84,7 +198,7 @@ trait HasEncryptedAttributes
             ->when(in_array(SoftDeletes::class, class_uses_recursive(get_class($this))), function ($query) {
                 $query->withTrashed();
             })->chunkById($chunkSize, function ($models) use (&$total) {
-                $models->each->encrypt();
+                $models->each->encryptExisting();
 
                 $total += $models->count();
 
@@ -96,38 +210,26 @@ trait HasEncryptedAttributes
 
     /**
      * Encrypt existing, not yet encrypted values on the current model.
+     *
+     * @throws CipherSweetException
+     * @throws CryptoOperationException
+     * @throws SodiumException
      */
-    public function encrypt(): void
+    public function encryptExisting(): void
     {
-        $casts = $this->getEncryptedAttributes();
-        $attributes = $this->getAttributes();
-        $encrypted = 0;
-        $encrypter = resolve(CipherSweetService::class);
+        $service = resolve(Encrypter::class);
 
-        foreach ($casts as $key => $value) {
-            if (Str::startsWith($attributes[$key], $encrypter->getEngine()->getBackend()->getPrefix())) {
-                continue;
-            }
+        // Filter out already encrypted attributes
+        $attributes = collect($this->attributesToArray())->filter(fn ($value) =>
+            ! (is_string($value) && Str::startsWith($value, $service->getEngine()->getBackend()->getPrefix()))
+        );
 
-            $value = $attributes[$key];
-            $this->attributes[$key] = $encrypter->encrypt($value, $this->getTable(), $key, $this->getAadValue());
-            SynchronizeIndexes::dispatch($this);
-            $encrypted++;
+        $this->encrypt($attributes->all());
+
+        if ($this->isDirty()) {
+            $this->saveQuietly();
+            SynchronizeIndexes::dispatch($this)->onQueue('cipher');
         }
-
-        if ($encrypted > 0) {
-            $this->save();
-        }
-    }
-
-    public function getBlindIndexes(): array
-    {
-        return static::$blindIndexes;
-    }
-
-    public function getCompoundIndexes(): array
-    {
-        return static::$compoundIndexes;
     }
 
     /**
@@ -138,63 +240,30 @@ trait HasEncryptedAttributes
     public function scopeWhereBlind(Builder $query, string $index, $value): Builder
     {
         return $query->whereHas('blindIndexes', function (Builder $builder) use ($index, $value) {
-            /** @var CipherSweetService $service */
-            $service = resolve(CipherSweetService::class);
-            $column = static::$indexColumns[$index];
+            $column = collect($this->indexes())->first(fn (Index $idx) => $idx->name === $index)->field;
             $attributes = is_string($column) ? [$column => $value] : $value;
+            $row = $this->toEncryptedRow();
 
             return $builder
                 ->where('name', '=', $index)
-                ->where('value', '=', $service->getBlindIndex($this, $index, $attributes));
+                ->where('value', '=', $row->getBlindIndex($index, $attributes));
         });
     }
 
-    /**
-     * Configures blind indexes.
-     */
-    protected static function configureIndexes(): void
+    protected function prepareEncryptedFields(array $attributes = []): array
     {
-        foreach (static::getIndexes() as $name => $configuration) {
-            $configuration = Arr::wrap($configuration);
-            $column = $configuration[0];
-            $transformations = isset($configuration[1]) ? static::convertTransformations(Arr::wrap($configuration[1])) : [];
-            $isSlow = $configuration[2] ?? false;
-            $bits = $configuration[3] ?? 256;
+        $fields = [];
 
-            if (is_array($column)) {
-                $compoundIndex = new CompoundIndex($name, $column, $bits, ! $isSlow);
-                foreach ($transformations as $transformation) {
-                    $compoundIndex->addRowTransform($transformation);
-                }
-                static::$compoundIndexes[$name] = $compoundIndex;
-            } else {
-                static::$blindIndexes[$column][$name] = new CipherSweetBlindIndex($name, $transformations, $bits, ! $isSlow);
+        foreach ($this->encryptedFields() as $field) {
+            $name = $field->getName();
+            if (array_key_exists($name, $attributes) && ($attributes[$name] !== null || $field->isNullable())) {
+                $fields[$name] = $field->serialize($attributes[$name]);
             }
-
-            static::$indexColumns[$name] = $column;
         }
+
+        return $fields;
     }
 
-    /**
-     * @return array<TransformationInterface>
-     */
-    protected static function convertTransformations(array $transformations): array
-    {
-        return array_map(function ($transformation) {
-            return app($transformation);
-        }, $transformations);
-    }
-
-    public function getEncryptedAttributes(): array
-    {
-        $casts = $this->getCasts();
-        $attributes = $this->attributesToArray();
-
-        return collect($casts)->filter(fn ($value, string $key) =>
-            ! array_key_exists($key, $this->getAttributes())
-            || $attributes[$key] === null
-            || ! $this->isClassCastable($key)
-            || ! $this->resolveCasterClass($key) instanceof Encrypted
-        )->all();
-    }
+    abstract public function indexes(): array;
+    abstract public function encryptedFields(): array;
 }

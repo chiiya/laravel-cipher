@@ -4,7 +4,7 @@ namespace Chiiya\LaravelCipher;
 
 use Chiiya\LaravelCipher\Commands\EncryptExistingDataCommand;
 use Chiiya\LaravelCipher\Commands\InstallCommand;
-use Chiiya\LaravelCipher\Services\CipherSweetService;
+use Chiiya\LaravelCipher\Services\Encrypter;
 use ParagonIE\CipherSweet\Backend\BoringCrypto;
 use ParagonIE\CipherSweet\Backend\FIPSCrypto;
 use ParagonIE\CipherSweet\Backend\ModernCrypto;
@@ -28,11 +28,11 @@ class LaravelCipherServiceProvider extends PackageServiceProvider
 
     public function packageRegistered()
     {
-        $this->app->singleton(CipherSweetService::class, function () {
+        $this->app->singleton(Encrypter::class, function () {
             $provider = new StringProvider(config('cipher.key'));
             $backend = $this->getBackend();
 
-            return new CipherSweetService(new CipherSweet($provider, $backend));
+            return new Encrypter(new CipherSweet($provider, $backend));
         });
     }
 
