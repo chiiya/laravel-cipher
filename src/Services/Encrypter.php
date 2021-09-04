@@ -49,10 +49,10 @@ class Encrypter
         $key = $this->engine->getFieldSymmetricKey($table, $key);
 
         if ($aad !== null) {
-            return unserialize($this->engine->getBackend()->decrypt($value, $key, $aad));
+            return $this->engine->getBackend()->decrypt($value, $key, $aad);
         }
 
-        return unserialize($this->engine->getBackend()->decrypt($value, $key));
+        return $this->engine->getBackend()->decrypt($value, $key);
     }
 
     public function getEngine(): CipherSweet
