@@ -148,9 +148,9 @@ trait HasEncryptedAttributes
         }
 
         $indexes = collect($this->toEncryptedRow()->getAllBlindIndexes($fields))
-            ->map(fn (string $value, string $name) => [
+            ->map(fn (array $value, string $name) => [
                 'name' => $name,
-                'value' => $value,
+                'value' => $value['value'],
                 'indexable_type' => $this->getMorphClass(),
                 'indexable_id' => $this->getKey(),
             ])
