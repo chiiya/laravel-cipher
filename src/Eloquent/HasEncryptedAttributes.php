@@ -2,7 +2,9 @@
 
 namespace Chiiya\LaravelCipher\Eloquent;
 
+use Chiiya\LaravelCipher\EncryptedRow;
 use Chiiya\LaravelCipher\Events\ModelsEncrypted;
+use Chiiya\LaravelCipher\Fields\BaseField;
 use Chiiya\LaravelCipher\Index;
 use Chiiya\LaravelCipher\Jobs\SynchronizeIndexes;
 use Chiiya\LaravelCipher\Models\BlindIndex;
@@ -14,7 +16,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use ParagonIE\CipherSweet\BlindIndex as CipherSweetBlindIndex;
 use ParagonIE\CipherSweet\CompoundIndex;
-use ParagonIE\CipherSweet\EncryptedRow;
 use ParagonIE\CipherSweet\Exception\ArrayKeyException;
 use ParagonIE\CipherSweet\Exception\CipherSweetException;
 use ParagonIE\CipherSweet\Exception\CryptoOperationException;
@@ -27,6 +28,9 @@ use SodiumException;
  */
 trait HasEncryptedAttributes
 {
+    /** @var BaseField[]|null */
+    protected ?array $encryptedFields = null;
+
     /**
      * HasEncryptedAttributes boot logic.
      */
@@ -110,7 +114,7 @@ trait HasEncryptedAttributes
         $encrypter = resolve(Encrypter::class);
         $attributes = $attributes ?: $this->attributesToArray();
 
-        foreach ($this->encryptedFields() as $field) {
+        foreach ($this->getEncryptedFields() as $field) {
             $name = $field->getName();
             if (isset($attributes[$name]) && Str::startsWith($attributes[$name], $encrypter->getEngine()->getBackend()->getPrefix())) {
                 $this->{$name} = $field->unserialize($encrypter->decrypt(
@@ -134,7 +138,15 @@ trait HasEncryptedAttributes
      */
     public function syncIndexes(): void
     {
-        $fields = $this->prepareEncryptedFields($this->attributesToArray());
+        $attributes = $this->attributesToArray();
+        $fields = [];
+
+        foreach ($this->getEncryptedFields() as $name => $field) {
+            if (array_key_exists($name, $attributes)) {
+                $fields[$name] = $field->serialize($attributes[$name]);
+            }
+        }
+
         $indexes = collect($this->toEncryptedRow()->getAllBlindIndexes($fields))
             ->map(fn (string $value, string $name) => [
                 'name' => $name,
@@ -180,9 +192,7 @@ trait HasEncryptedAttributes
             }
         }
 
-        foreach ($this->encryptedFields() as $field) {
-            $row->addTextField($field->getName());
-        }
+        $row->setFields($this->getEncryptedFields());
 
         return $row;
     }
@@ -254,9 +264,8 @@ trait HasEncryptedAttributes
     {
         $fields = [];
 
-        foreach ($this->encryptedFields() as $field) {
-            $name = $field->getName();
-            if (array_key_exists($name, $attributes) && ($attributes[$name] !== null || $field->isNullable())) {
+        foreach ($this->getEncryptedFields() as $name => $field) {
+            if (array_key_exists($name, $attributes) && ($attributes[$name] !== null || ! $field->isNullable())) {
                 $fields[$name] = $field->serialize($attributes[$name]);
             }
         }
@@ -264,7 +273,31 @@ trait HasEncryptedAttributes
         return $fields;
     }
 
+    /**
+     * Define the encrypted fields for the model.
+     *
+     * @return BaseField[]
+     */
     abstract public function encryptedFields(): array;
 
+    /**
+     * Define the blind and compound indexes for the model.
+     *
+     * @return Index[]
+     */
     abstract public function indexes(): array;
+
+    /**
+     * @return BaseField[]
+     */
+    public function getEncryptedFields(): array
+    {
+        if ($this->encryptedFields === null) {
+            foreach ($this->encryptedFields() as $field) {
+                $this->encryptedFields[$field->getName()] = $field;
+            }
+        }
+
+        return $this->encryptedFields;
+    }
 }

@@ -18,18 +18,6 @@ abstract class BaseField
      */
     protected bool $nullable = false;
 
-    /**
-     * Encrypted database value.
-     */
-    protected string $encrypted;
-
-    /**
-     * Decrypted database value.
-     *
-     * @var mixed|null
-     */
-    protected $decrypted = null;
-
     public function __construct(string $name)
     {
         $this->name = $name;

@@ -45,7 +45,7 @@ class SynchronizeIndexes implements ShouldQueue
     /**
      * Determine if the given model class is encryptable.
      */
-    protected function isEncryptable(string $model): bool
+    protected function isEncryptable(Model $model): bool
     {
         return in_array(HasEncryptedAttributes::class, class_uses_recursive($model));
     }
