@@ -36,12 +36,15 @@ class EncryptedRow extends CipherSweetEncryptedRow
             /** @var BlindIndex $blindIndex */
             foreach ($blindIndexes as $blindIndex) {
                 $return[$blindIndex->getName()] = $this->calcBlindIndex(
-                    $row,
+                    [$column => $this->fields[$column]->serialize($row[$column])],
                     $column,
                     $blindIndex
                 );
             }
         }
+
+        $row = collect($row)->map(fn ($value, string $key) => $this->fields[$key]->serialize($value))->all();
+
         /**
          * @var string $name
          * @var CompoundIndex $compoundIndex

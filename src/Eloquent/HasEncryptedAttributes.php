@@ -139,14 +139,7 @@ trait HasEncryptedAttributes
     public function syncIndexes(): void
     {
         $attributes = $this->attributesToArray();
-        $fields = [];
-
-        foreach ($this->getEncryptedFields() as $name => $field) {
-            if (array_key_exists($name, $attributes)) {
-                $fields[$name] = $field->serialize($attributes[$name]);
-            }
-        }
-
+        $fields = collect($attributes)->intersectByKeys($this->getEncryptedFields())->all();
         $indexes = collect($this->toEncryptedRow()->getAllBlindIndexes($fields))
             ->map(fn (array $value, string $name) => [
                 'name' => $name,
