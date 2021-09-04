@@ -265,5 +265,6 @@ trait HasEncryptedAttributes
     }
 
     abstract public function encryptedFields(): array;
+
     abstract public function indexes(): array;
 }
