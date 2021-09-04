@@ -136,7 +136,7 @@ trait HasEncryptedAttributes
     {
         $fields = $this->prepareEncryptedFields($this->attributesToArray());
         $indexes = collect($this->toEncryptedRow()->getAllBlindIndexes($fields))
-            ->map(fn (string $value, string $name) => [
+            ->map(fn(string $value, string $name) => [
                 'name' => $name,
                 'value' => $value,
                 'indexable_type' => $this->getMorphClass(),
@@ -220,8 +220,7 @@ trait HasEncryptedAttributes
         $service = resolve(Encrypter::class);
 
         // Filter out already encrypted attributes
-        $attributes = collect($this->attributesToArray())->filter(fn ($value) =>
-            ! (is_string($value) && Str::startsWith($value, $service->getEngine()->getBackend()->getPrefix()))
+        $attributes = collect($this->attributesToArray())->filter(fn($value) => !(is_string($value) && Str::startsWith($value, $service->getEngine()->getBackend()->getPrefix()))
         );
 
         $this->encrypt($attributes->all());
@@ -240,7 +239,7 @@ trait HasEncryptedAttributes
     public function scopeWhereBlind(Builder $query, string $index, $value): Builder
     {
         return $query->whereHas('blindIndexes', function (Builder $builder) use ($index, $value) {
-            $column = collect($this->indexes())->first(fn (Index $idx) => $idx->name === $index)->field;
+            $column = collect($this->indexes())->first(fn(Index $idx) => $idx->name === $index)->field;
             $attributes = is_string($column) ? [$column => $value] : $value;
             $row = $this->toEncryptedRow();
 
@@ -263,7 +262,4 @@ trait HasEncryptedAttributes
 
         return $fields;
     }
-
-    abstract public function indexes(): array;
-    abstract public function encryptedFields(): array;
 }
