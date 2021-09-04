@@ -39,7 +39,7 @@ class Index
     /**
      * Transformations to apply to the attribute value(s) before creating the index.
      *
-     * @var TransformationInterface[]|RowTransformationInterface[] $transformations
+     * @var TransformationInterface[]|RowTransformationInterface[]
      */
     public array $transformations;
 

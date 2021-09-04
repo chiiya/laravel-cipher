@@ -64,5 +64,6 @@ abstract class BaseField
     }
 
     abstract public function serialize($value): string;
+
     abstract public function unserialize($value);
 }
