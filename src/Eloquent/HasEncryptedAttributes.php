@@ -263,4 +263,7 @@ trait HasEncryptedAttributes
 
         return $fields;
     }
+
+    abstract public function encryptedFields(): array;
+    abstract public function indexes(): array;
 }
