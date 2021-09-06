@@ -55,4 +55,11 @@ class EncryptedRow extends CipherSweetEncryptedRow
 
         return $return;
     }
+
+    public function getBlindIndex($indexName, array $row)
+    {
+        $row = collect($row)->map(fn ($value, string $key) => $this->fields[$key]->serialize($value))->all();
+
+        return parent::getBlindIndex($indexName, $row);
+    }
 }

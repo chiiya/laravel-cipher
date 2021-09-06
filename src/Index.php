@@ -41,7 +41,7 @@ class Index
      *
      * @var TransformationInterface[]|RowTransformationInterface[]
      */
-    public array $transformations;
+    public array $transformations = [];
 
     public function __construct($field, string $name)
     {

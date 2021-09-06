@@ -85,15 +85,17 @@ trait HasEncryptedAttributes
     {
         /** @var Encrypter $service */
         $service = resolve(Encrypter::class);
-        $fields = $this->prepareEncryptedFields($attributes ?: $this->attributesToArray());
+        $fields = $this->prepareEncryptedFields($attributes ?: $this->attributes);
 
         foreach ($fields as $field => $value) {
-            $this->{$field} = $service->encrypt(
-                $value,
-                $this->getTable(),
-                $field,
-                $this->getAadValue()
-            );
+            $this->setRawAttributes(array_merge($this->attributes, [
+                $field => $service->encrypt(
+                    $value,
+                    $this->getTable(),
+                    $field,
+                    $this->getAadValue()
+                ),
+            ]));
         }
 
         return $this;
@@ -112,7 +114,7 @@ trait HasEncryptedAttributes
     {
         /** @var Encrypter $encrypter */
         $encrypter = resolve(Encrypter::class);
-        $attributes = $attributes ?: $this->attributesToArray();
+        $attributes = $attributes ?: $this->attributes;
 
         foreach ($this->getEncryptedFields() as $field) {
             $name = $field->getName();
@@ -138,8 +140,7 @@ trait HasEncryptedAttributes
      */
     public function syncIndexes(): void
     {
-        $attributes = $this->attributesToArray();
-        $fields = collect($attributes)->intersectByKeys($this->getEncryptedFields())->all();
+        $fields = collect($this->attributes)->intersectByKeys($this->getEncryptedFields())->all();
         $indexes = collect($this->toEncryptedRow()->getAllBlindIndexes($fields))
             ->map(fn (array $value, string $name) => [
                 'name' => $name,
@@ -223,7 +224,7 @@ trait HasEncryptedAttributes
         $service = resolve(Encrypter::class);
 
         // Filter out already encrypted attributes
-        $attributes = collect($this->attributesToArray())->filter(
+        $attributes = collect($this->attributes)->filter(
             fn ($value) => ! (is_string($value) && Str::startsWith($value, $service->getEngine()->getBackend()->getPrefix()))
         );
 
@@ -249,7 +250,7 @@ trait HasEncryptedAttributes
 
             return $builder
                 ->where('name', '=', $index)
-                ->where('value', '=', $row->getBlindIndex($index, $attributes));
+                ->where('value', '=', $row->getBlindIndex($index, $attributes)['value']);
         });
     }
 
